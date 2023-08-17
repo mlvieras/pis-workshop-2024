@@ -25,6 +25,7 @@ First step is cloning Xmartlabs' Create React App template.
 
 ```sh
 cd frontend
+npm install
 npm start
 ```
 
