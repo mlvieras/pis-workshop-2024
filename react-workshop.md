@@ -2,14 +2,6 @@
 
 ## Setting up the project
 
-### Cloning the template
-
-First step is cloning Xmartlabs' Create React App template.
-
-* Go to [the Github repo](https://github.com/xmartlabs/cra-template-xmartlabs).
-* Clone the project on your machine.
-* Keep track of where you cloned it!
-
 ### Install the appropriate versions of Node and NPM
 
 There's a multitude of ways to install and manage Node versions. Usually, projects will require you to be able to spin up many versions of Node. It's simply too annoying to uninstall and install a different version each time. That's why there exist different version managers that support Node. Some of them are `nodenv`, `nvm` and `asdf`.
@@ -17,21 +9,22 @@ There's a multitude of ways to install and manage Node versions. Usually, projec
 At Xmartlabs we've mostly used [nodenv](https://github.com/nodenv/nodenv), so these next instructions take for granted that you have it installed on your machine.
 
 ```sh
-nodenv install 16.5.0
+nodenv install 18.15.0
 nodenv rehash
-npm i -g npm@7.24.0
+npm i -g npm@9.6.2
 ```
 
-### Create a new project from the template
+### Cloning the template
 
-```sh
-npx create-react-app --template file:~/PATH/TO/TEMPLATE react-workshop
-```
+First step is cloning Xmartlabs' Create React App template.
+
+* Go to [the Github repo](https://github.com/xmartlabs/react-template-xmartlabs)
+* Run `degit`: `npx degit@latest xmartlabs/react-template-xmartlabs frontend`
 
 ### Run the newly-created project
 
 ```sh
-cd react-workshop
+cd frontend
 npm start
 ```
 
