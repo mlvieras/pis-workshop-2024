@@ -114,7 +114,6 @@ bundle install
 Lastly, create a `.env.development.local` file with the following variables:
 
 ```sh
-DB_NAME=rails_workshop_development
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=postgres
@@ -130,7 +129,6 @@ First, we need to tell Rails to load our environment variables somewhere for eas
 ```ruby
 config.database_host = ENV.fetch('DB_HOST')
 config.database_port = ENV.fetch('DB_PORT', 5432)
-config.database_name = ENV.fetch('DB_NAME')
 config.database_username = ENV.fetch('DB_USERNAME')
 config.database_password = ENV.fetch('DB_PASSWORD')
 ```
@@ -147,7 +145,6 @@ default: &default
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
   host: <%= Rails.application.config.database_host %>
   port: <%= Rails.application.config.database_port %>
-  database: <%= Rails.application.config.database_name %>
   username: <%= Rails.application.config.database_username %>
   password: <%= Rails.application.config.database_password %>
 ```
@@ -289,15 +286,15 @@ Service objects are a way to centralize application logic outside of models and 
 For example, let's create a service object that handles the creation of our `Message` instances.
 
 ```ruby
-# lib/services/create_message_service.rb
-class CreateMessageService
-  class InvalidNameError < StandardError;
+# app/services/messages/create_message_service.rb
+class Messages::CreateMessageService
+  class InvalidNameError < StandardError; end
 
   def initialize(message_data:)
     @message_data = message_data
   end
 
-  def run(message_data:)
+  def run
     validate_data!
 
     create!
@@ -313,4 +310,23 @@ class CreateMessageService
     Message.create!(**message_data)
   end
 end
+```
+
+Here's how the controller looks now:
+
+```ruby
+# frozen_string_literal: true
+
+class MessagesController < ApplicationController
+  def index
+    render json: Message.all
+  end
+
+  def create
+    create_params = params.require(:message).permit(:content, :due_date, :is_complete)
+
+    render json: Services::CreateMessageService.new(message_data: create_params).run
+  end
+end
+
 ```
