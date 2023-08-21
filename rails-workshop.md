@@ -303,11 +303,11 @@ class Messages::CreateMessageService
   private
 
   def validate_data!
-    raise InvalidNameError, 'name must not be blank' if message_data[:name].blank?
+    raise InvalidNameError, 'name must not be blank' if @message_data[:content].blank?
   end
 
   def create!
-    Message.create!(**message_data)
+    Message.create!(**@message_data)
   end
 end
 ```
@@ -325,7 +325,7 @@ class MessagesController < ApplicationController
   def create
     create_params = params.require(:message).permit(:content, :due_date, :is_complete)
 
-    render json: Services::CreateMessageService.new(message_data: create_params).run
+    render json: Messages::CreateMessageService.new(message_data: create_params).run
   end
 end
 
