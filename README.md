@@ -1,1 +1,1 @@
-# pis-workshop-2023
+# pis-workshop-2024
