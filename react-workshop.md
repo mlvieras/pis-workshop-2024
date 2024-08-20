@@ -9,9 +9,9 @@ There's a multitude of ways to install and manage Node versions. Usually, projec
 At Xmartlabs we've mostly used [nodenv](https://github.com/nodenv/nodenv), so these next instructions take for granted that you have it installed on your machine.
 
 ```sh
-nodenv install 18.15.0
+nodenv install 20.8.1
 nodenv rehash
-npm i -g npm@9.6.2
+npm i -g npm@10.8.2
 ```
 
 ### Cloning the template
