@@ -9,8 +9,7 @@ There's a multitude of ways to install and manage Ruby versions. Usually, projec
 At Xmartlabs we've mostly used [rbenv](https://github.com/rbenv/rbenv), so these next instructions take for granted that you have it installed on your machine.
 
 ```sh
-rbenv install 3.1.1
-rbenv rehash
+rbenv install 3.3.4
 ```
 
 ### Install bundler
@@ -22,7 +21,7 @@ gem install bundler
 ### Install Rails
 
 ```sh
-gem install rails -v 7.0.3.1
+gem install rails -v 7.2.0
 ```
 
 ### Generate a rails project
@@ -93,6 +92,12 @@ Then, start the database in background with this command:
 docker-compose -f dev.docker-compose.yml up -d
 ```
 
+You can check the logs of the service by running:
+
+```sh
+docker-compose -f dev.docker-compose.yml logs
+```
+
 #### Environment variables
 
 In order to be able to read environment variables from a file we need to install a new library and add it to our Gemfile. You can do this by adding a line on the Gemfile:
@@ -101,7 +106,7 @@ In order to be able to read environment variables from a file we need to install
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri mingw x64_mingw ]
-  gem 'dotenv-rails', '~> 2.7.6' # <-- This is the new line!
+  gem "dotenv-rails", "~> 2.7.6" # <-- This is the new line!
 end
 ```
 
@@ -127,10 +132,10 @@ DB_PASSWORD=postgres
 First, we need to tell Rails to load our environment variables somewhere for ease of access. Usually this is done on the configuration files. In this case we're going to use `application.rb` which stores general configuration for all environments.
 
 ```ruby
-config.database_host = ENV.fetch('DB_HOST')
-config.database_port = ENV.fetch('DB_PORT', 5432)
-config.database_username = ENV.fetch('DB_USERNAME')
-config.database_password = ENV.fetch('DB_PASSWORD')
+config.database_host = ENV.fetch("DB_HOST")
+config.database_port = ENV.fetch("DB_PORT", 5432)
+config.database_username = ENV.fetch("DB_USERNAME")
+config.database_password = ENV.fetch("DB_PASSWORD")
 ```
 
 Finally you'll need to point to these values on the `database.yml` file. On the `default` block, add these lines:
@@ -141,8 +146,8 @@ default: &default
   encoding: unicode
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
-  # NOTE: NEW LINES START HERE:
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  # NOTE: NEW LINES START HERE:
   host: <%= Rails.application.config.database_host %>
   port: <%= Rails.application.config.database_port %>
   username: <%= Rails.application.config.database_username %>
@@ -169,7 +174,7 @@ This should output something like this:
 
 ```
 invoke  active_record
-create    db/migrate/20220823192835_create_messages.rb
+create    db/migrate/20240816131231_create_messages.rb
 create    app/models/message.rb
 invoke    test_unit
 create      test/models/message_test.rb
@@ -208,11 +213,20 @@ Message.first # Should output the message you just created.
 Let's create our first controller and route. First, let's add a line to the routes file:
 
 ```ruby
+# backend/config/routes.rb
 Rails.application.routes.draw do
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
+  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
+  # Can be used by load balancers and uptime monitors to verify that the app is live.
+  get "up" => "rails/health#show", as: :rails_health_check
+
+  # Render dynamic PWA files from app/views/pwa/*
+  get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
+  get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
+
   # Defines the root path route ("/")
-  # root "articles#index"
+  # root "posts#index"
 
   resources :messages, only: %i[index] # <-- NEW LINE
 end
@@ -240,17 +254,17 @@ class MessagesController < ApplicationController
 end
 ```
 
-You can very easily check that your controller works by accessing the route on a browser: `http://localhost:3000/messages`. You should see this response:
+You can very easily check that your controller works by accessing the route on a browser: `http://localhost:3000/messages`. Make sure that your rails server is running (`bundle exec rails s`). You should see this response:
 
 ```json
 [
   {
     "id": 1,
     "content": "This is the content of the message",
-    "due_date": "2022-08-23",
+    "due_date": "2024-08-16",
     "is_complete": false,
-    "created_at": "2022-08-23T19:35:03.268Z",
-    "updated_at": "2022-08-23T19:35:03.268Z"
+    "created_at": "2024-08-16T13:13:34.965Z",
+    "updated_at": "2024-08-16T13:13:34.965Z"
   }
 ]
 ```
@@ -328,5 +342,91 @@ class MessagesController < ApplicationController
     render json: Messages::CreateMessageService.new(message_data: create_params).run
   end
 end
-
 ```
+
+To test this out, you can create a message from the command line by using cURL:
+
+```sh
+curl --location 'localhost:3000/messages' \
+--header 'Content-Type: application/json' \
+--data '{
+  "content": "My message content",
+  "due_date": "2024-08-26 13:22:13 -0300",
+  "is_complete": false
+}'
+```
+
+## Dockerization
+
+First, we need to create a Dockerfile that contains instructions on how to generate the backend's image.
+
+```dockerfile
+# backend/Dockerfile
+FROM ruby:3.3.4
+
+RUN gem install bundler -v 2.5.11 && \
+  apt-get update && \
+  apt-get install -y postgresql-client
+
+# Change user to avoid running cosmmands with root user.
+RUN groupadd --gid 1000 ruby \
+  && useradd --uid 1000 --gid ruby --shell /bin/bash --create-home ruby
+
+WORKDIR /code
+
+COPY --chown=ruby:ruby . .
+
+RUN bundle install
+
+USER ruby
+EXPOSE 3000
+
+ENV RAILS_ENV=development
+
+CMD rm -f tmp/pids/server.pid && \
+  bundle exec rails db:migrate && \
+  bundle exec rails s -b 0.0.0.0
+```
+
+Then, create the full docker-compose configuration:
+
+```yml
+# dev.docker-compose.yml
+services:
+  database:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - ./backend/.env.development.local
+    ports:
+      - 3000:3000
+    depends_on:
+      - database
+    tty: true
+    stdin_open: true
+volumes:
+  db:
+    driver: local
+```
+
+Before running this, you'll need to change the `DB_HOST` variable on `.env.development.local` and set it to `database` (since our database will be running in another "host").
+
+Then simply run: 
+
+```sh
+docker-compose -f dev.docker-compose.yml build
+docker-compose -f dev.docker-compose.yml up
+```
+
+Test this by navigating to `http://localhost:3000/messages`.
