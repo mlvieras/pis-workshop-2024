@@ -10,7 +10,6 @@ At Xmartlabs we've mostly used [nodenv](https://github.com/nodenv/nodenv), so th
 
 ```sh
 nodenv install 20.8.1
-nodenv rehash
 npm i -g npm@10.8.2
 ```
 
@@ -35,13 +34,9 @@ We're going to create a very small application that lists some tasks the user ha
 
 ### No backend? No worries!
 
-In order to quickly have a "backend" running, we're going to use [`json-server`](https://github.com/typicode/json-server). First, install the library with:
+In order to quickly have a "backend" running, we're going to use [`json-server`](https://github.com/typicode/json-server).
 
-```sh
-npm i -D json-server
-```
-
-Then, create a `db.json` file on the root of the react workshop:
+First, we need to create a `db.json` file on the root of the react workshop:
 
 ```sh
 touch db.json
@@ -113,8 +108,9 @@ We'll need to create two things:
 
 Here's the controller:
 
-```js
+```ts
 // src/networking/controllers/message-controller.ts
+
 import { MessageSerializer } from 'networking/serializers/message-serializer';
 import { ApiService } from 'networking/api-service';
 import { API_ROUTES } from 'networking/api-routes';
@@ -122,7 +118,7 @@ import { API_ROUTES } from 'networking/api-routes';
 class MessageController {
   static async getMessages() : Promise<Message[]> {
     const response = await ApiService.get<RawMessage[]>(API_ROUTES.MESSAGES);
-    return (response.data || []).map(MessageSerializer.deSerialize);
+    return (response[]).map(MessageSerializer.deSerialize);
   }
 }
 
@@ -131,8 +127,9 @@ export { MessageController };
 
 The serializer:
 
-```js
+```ts
 // src/networking/serializers/message-serializer.ts
+
 class MessageSerializer {
   static deSerialize(data: RawMessage) : Message {
     return {
@@ -147,10 +144,11 @@ class MessageSerializer {
 export { MessageSerializer };
 ```
 
-And lastly, the types:
+The types:
 
 ```ts
 // src/networking/types/message.d.ts
+
 type RawMessage = {
   id: number,
   content: string,
@@ -166,19 +164,189 @@ type Message = {
 };
 ```
 
+Then, we need to add the path to our endpoint:
+
+```ts
+// src/networking/api-routes.ts
+
+const API_ROUTES = {
+    MESSAGES: "/messages",
+};
+```
+
+And lastly, update our enviroment variables. We need to rename the .env.development.local.example to .env.development.local
+and replace the VITE_API_BASE_URL with the URL of our endpoint (you can see where the json-server is running in the terminal).
+
 ### Fetch our data!
 
-(This will be done on the workshop itself).
+To achieve this, we need to modify our home componenet slightly.
+We'll replace the content in our home for these lines:
 
-* Update the environment variable that stores the backend URL.
-* Add a `useEffect` call to fetch messages on page load.
-* Add a `useState` call to store fetched messages local to the component.
-* Render the information of the messages on screen.
+```ts
+// src/pages/homes/home.tsx
+import { classnames } from "helpers/utils";
+import globalStyles from "assets/stylesheets/global-styles.module.scss";
+import { useEffect, useState } from "react";
+import { MessageController } from "networking/controllers/message-controller";
+import { Button } from "common/button";
+import { TextField } from "common/text-field";
+import styles from "./home.module.scss";
 
-### Create new messages!
+const Home = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
 
-* Add a form to create a new message.
-* Create new types for "pending" messages.
-* Add a method to the controller to create a message.
-* Add a method to the serializer to serialize the message.
-* When a message has been created, automatically add it to the list.
+  useEffect(() => {
+      const fetch = async () => {
+        const response = await MessageController.getMessages();
+        setMessages(response);
+      };
+      fetch();
+    }, []);
+
+  return (
+    <div
+      className={classnames(styles.container, globalStyles.genericContainer)}
+    >
+      <div className={styles.subContainer}>
+        <div>
+          <h2>Messages</h2>
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              style={{
+                flexDirection: "row",
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>{`[${m.isComplete ? "✅" : "❌"}] ${m.content}`}</div>
+              <div>{m.dueDate.toLocaleDateString('US')}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export { Home };
+
+```
+
+If we have succeeded, we should see the messages in our home.
+
+### Put new data!
+
+Now, in our final step of this workshop, we'll add a form to create messages. We'll need to add a new endpoint
+to our controller and some logic in our home.
+
+
+In the controller:
+
+```ts
+// src/networking/controllers/message-controller.ts
+
+static async createMessage(message: Message): Promise<Message> {
+  const response = await ApiService.post<RawMessage>(API_ROUTES.MESSAGES, {
+    body: JSON.stringify({
+      content: message.content,
+      due_date: new Date(message.dueDate),
+      is_complete: message.isComplete,
+    }),
+  });
+
+  if (response) {
+    return MessageSerializer.deSerialize(response);
+  }
+  return {} as Message;
+}
+```
+
+In home:
+
+```ts
+// src/pages/homes/home.tsx
+
+// we need add this below the other useState
+const [content, setContent] = useState<string | undefined>(undefined);
+const [dueDate, setDueDate] = useState<string | undefined>(undefined);
+const [isComplete, setIsComplete] = useState(false);
+const [idLastMessage, setIdLastMessage] = useState<string>("");
+
+
+// under useEffect add:
+const validValues = content && dueDate;
+
+const handleSubmit = async (e: any) => {
+  e.preventDefault();
+
+  if (idLastMessage && content && dueDate) {
+    const newMessage = await MessageController.createMessage({
+      id: idLastMessage.toString(),
+      content,
+      dueDate: new Date(dueDate),
+      isComplete,
+    });
+
+    setIdLastMessage(idLastMessage + 1);
+    setMessages((prevState) => [...prevState, newMessage]);
+
+    setContent("");
+    setIsComplete(false);
+  }
+};
+
+//and below the Messages' div add:
+<div className={styles.formContainer}>
+  <form onSubmit={handleSubmit} className={styles.form}>
+    <TextField
+      label="Id"
+      name="id"
+      onChange={(event) => {
+        setIdLastMessage(event.target.value);
+      }}
+      value={idLastMessage}
+    />
+    <TextField
+      label="Content"
+      name="content"
+      onChange={(event) => {
+        setContent(event.target.value);
+      }}
+      value={content}
+    />
+    <div>
+      <label htmlFor="due_date">Due date:</label>
+      <input
+        type="date"
+        id="due_date"
+        name="due_date"
+        value={dueDate}
+        onChange={(event) => {
+          setDueDate(event.target.value);
+        }}
+      />
+    </div>
+    <div>
+      <label htmlFor="is_complete">Is completed?</label>
+      <input
+        type="checkbox"
+        id="is_complete"
+        name="is_complete"
+        checked={isComplete}
+        onChange={() => {
+          setIsComplete((prevState) => !prevState);
+        }}
+      />
+    </div>
+    <Button type="submit" disabled={!validValues}>
+      Save message
+    </Button>
+  </form>
+</div>
+```
+If we succeeded, we should be able to add a message, and the list should automatically update with the new message.
+
+Good Job!
+
+Note: we strongly recommend read [`useState`](https://react.dev/reference/react/useState), [`useEffect`](https://react.dev/reference/react/useEffect) to understand the workshop.
